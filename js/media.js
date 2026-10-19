@@ -189,8 +189,8 @@ export function seek(v, t) {
   });
 }
 
-/** QuickTime / MP4 capture time from the `mvhd` box (seconds since 1904, UTC). */
-async function movCreationTime(file) {
+/** The QuickTime / MP4 `moov` box (first 8 MB of it), or null. */
+async function readMoov(file) {
   let off = 0;
   for (let n = 0; n < 64 && off + 8 <= file.size; n++) {
     const hdr = new DataView(await file.slice(off, off + 16).arrayBuffer());
@@ -199,26 +199,40 @@ async function movCreationTime(file) {
     let head = 8;
     if (size === 1) { size = Number(hdr.getBigUint64(8)); head = 16; }
     else if (size === 0) size = file.size - off;
-    if (type === 'moov') {
-      const moov = new DataView(await file.slice(off + head, off + Math.min(size, 8 << 20)).arrayBuffer());
-      for (let p = 0; p + 8 <= moov.byteLength;) {
-        const s = moov.getUint32(p);
-        const ty = String.fromCharCode(moov.getUint8(p + 4), moov.getUint8(p + 5), moov.getUint8(p + 6), moov.getUint8(p + 7));
-        if (ty === 'mvhd') {
-          const ver = moov.getUint8(p + 8);
-          const secs = ver === 1 ? Number(moov.getBigUint64(p + 12)) : moov.getUint32(p + 12);
-          if (secs > 0) return (secs - 2082844800) * 1000;
-          return null;
-        }
-        if (s < 8) break;
-        p += s;
-      }
-      return null;
-    }
+    if (type === 'moov') return new DataView(await file.slice(off + head, off + Math.min(size, 8 << 20)).arrayBuffer());
     if (size < 8) break;
     off += size;
   }
   return null;
+}
+
+/** Capture time from the `mvhd` box (seconds since 1904, UTC). */
+function movCreationTime(moov) {
+  if (!moov) return null;
+  for (let p = 0; p + 8 <= moov.byteLength;) {
+    const s = moov.getUint32(p);
+    const ty = String.fromCharCode(moov.getUint8(p + 4), moov.getUint8(p + 5), moov.getUint8(p + 6), moov.getUint8(p + 7));
+    if (ty === 'mvhd') {
+      const ver = moov.getUint8(p + 8);
+      const secs = ver === 1 ? Number(moov.getBigUint64(p + 12)) : moov.getUint32(p + 12);
+      return secs > 0 ? (secs - 2082844800) * 1000 : null;
+    }
+    if (s < 8) break;
+    p += s;
+  }
+  return null;
+}
+
+/** A readable name for the video's codec, for "skipped" messages. */
+const CODECS = { hvc1: 'hevc', hev1: 'hevc', dvh1: 'dolby vision', dvhe: 'dolby vision', avc1: 'h.264', avc3: 'h.264',
+  apcn: 'prores', apch: 'prores', apcs: 'prores', apco: 'prores', ap4h: 'prores', ap4x: 'prores', vp09: 'vp9', av01: 'av1' };
+function videoFormat(moov) {
+  if (!moov) return '';
+  const bytes = new Uint8Array(moov.buffer, moov.byteOffset, moov.byteLength);
+  const text = new TextDecoder('latin1').decode(bytes);
+  const found = Object.keys(CODECS).filter((k) => text.includes(k)).map((k) => CODECS[k]);
+  if (text.includes('vexu')) found.push('spatial');
+  return [...new Set(found)].join(' + ');
 }
 
 export class VideoSource {
@@ -391,11 +405,16 @@ export async function loadAlbum(files, onProgress = () => {}) {
   for (const f of videoFiles) {
     onProgress(done, total, f.name);
     const v = new VideoSource(f);
+    let moov = null;
     try {
-      v.taken = (await movCreationTime(f)) ?? f.lastModified;
+      moov = await readMoov(f).catch(() => null);
+      v.taken = movCreationTime(moov) ?? f.lastModified;
       await v.analyze();
       videos.push(v);
-    } catch (e) { failed.push({ name: f.name, reason: e.message }); }
+    } catch (e) {
+      const about = [videoFormat(moov), `${(f.size / 1e6).toFixed(f.size < 1e7 ? 1 : 0)} mb`].filter(Boolean).join(', ');
+      failed.push({ name: f.name, reason: `${e.message || e.name || 'unknown error'} · ${about}` });
+    }
     done++;
   }
   onProgress(total, total, '');

@@ -1,6 +1,6 @@
 // Frame-by-frame H.264 encoding in the browser (WebCodecs) muxed to .mp4 (mp4-muxer).
 
-import { FPS } from './media.js';
+import { FPS } from './media.js?v=7';
 
 export const canEncode = () => !whyCantEncode();
 

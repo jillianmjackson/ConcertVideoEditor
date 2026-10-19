@@ -1,7 +1,7 @@
 // The export templates. Each one is a port of the Python renderer in "Media Templates/render.py":
 // same geometry, timing and type scale, drawn onto a 1080x1920 canvas one frame at a time.
 
-import { FPS, makeCanvas, albumItems, Clip } from './media.js';
+import { FPS, makeCanvas, albumItems, Clip } from './media.js?v=7';
 
 export const W = 1080, H = 1920;
 const FAMILY = '"Cossette Texte"';

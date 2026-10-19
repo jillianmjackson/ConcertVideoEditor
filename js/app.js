@@ -1,6 +1,6 @@
-import { loadAlbum, filesFromDrop, isPhoto, isVideo, makeCanvas, FPS } from './media.js';
-import { TEMPLATES, W, H } from './templates.js';
-import { encodeVideo, canEncode, whyCantEncode } from './encoder.js';
+import { loadAlbum, filesFromDrop, isPhoto, isVideo, makeCanvas, FPS } from './media.js?v=7';
+import { TEMPLATES, W, H } from './templates.js?v=7';
+import { encodeVideo, canEncode, whyCantEncode } from './encoder.js?v=7';
 
 const $ = (s) => document.querySelector(s);
 const STORE = 'cve:v3';
