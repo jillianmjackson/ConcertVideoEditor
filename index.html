@@ -22,7 +22,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5m6-7-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
         </button>
         <p class="hero-title">concert video editor</p>
-        <p class="hero-count" id="count">1 / 4</p>
+        <p class="hero-count" id="count">1 / 5</p>
       </div>
       <h1 class="hero-name" id="title">add your media</h1>
       <p class="hero-sub" id="sub">a folder from the show, or just the photos and videos you want.</p>
@@ -31,9 +31,10 @@
 
     <nav class="pills" aria-label="steps">
       <button class="pill" type="button" data-step="0">upload</button>
-      <button class="pill" type="button" data-step="1">template</button>
-      <button class="pill" type="button" data-step="2">render</button>
-      <button class="pill" type="button" data-step="3">export</button>
+      <button class="pill" type="button" data-step="1">event</button>
+      <button class="pill" type="button" data-step="2">template</button>
+      <button class="pill" type="button" data-step="3">render</button>
+      <button class="pill" type="button" data-step="4">export</button>
     </nav>
 
     <main>
@@ -46,14 +47,18 @@
         <div class="tiles" id="tiles"></div>
       </section>
 
-      <!-- 2 · template -->
+      <!-- 2 · event -->
       <section class="screen" data-screen="1" hidden>
-        <div class="cards" id="cards" role="radiogroup" aria-label="templates"></div>
-        <div class="words" id="words"></div>
+        <form class="words event" id="event" autocomplete="off"></form>
       </section>
 
-      <!-- 3 · render -->
+      <!-- 3 · template -->
       <section class="screen" data-screen="2" hidden>
+        <div class="cards" id="cards" role="radiogroup" aria-label="templates"></div>
+      </section>
+
+      <!-- 4 · render -->
+      <section class="screen" data-screen="3" hidden>
         <div class="status" id="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="render-status">
           <div class="status-row">
             <p id="render-status" aria-live="polite">ready</p>
@@ -65,8 +70,8 @@
         <div class="stage"><canvas id="preview" width="360" height="640" aria-label="preview"></canvas></div>
       </section>
 
-      <!-- 4 · export -->
-      <section class="screen" data-screen="3" hidden>
+      <!-- 5 · export -->
+      <section class="screen" data-screen="4" hidden>
         <video id="result" controls playsinline muted loop></video>
         <p class="note" id="export-note"></p>
       </section>

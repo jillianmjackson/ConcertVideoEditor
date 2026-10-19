@@ -269,19 +269,16 @@ async function prepareWheel(env) {
 export const TEMPLATES = [
   {
     id: 'stacked', name: 'stacked export', file: 'stacked-export', blurb: 'cards pile up on black', seconds: 7,
-    fields: [{ key: 'title', label: 'title', rows: 1 }, { key: 'subtitle', label: 'under the title', rows: 2 }],
     defaults: (s) => ({ title: s.artist, subtitle: [s.date, s.venue].filter(Boolean).join('\n') }),
     prepare: prepareStacked,
   },
   {
     id: 'info-mixed', name: 'info spread, mixed', file: 'info-spread-mixed', blurb: 'half still photos, half playing videos', seconds: 30,
-    fields: [{ key: 'lines', label: 'lines', rows: 6 }], background: true,
     defaults: infoDefaults,
     prepare: (env) => prepareInfo(env, true),
   },
   {
     id: 'wheel', name: 'wheel spread', file: 'wheel-spread', blurb: 'a turning wheel of cards', seconds: 21,
-    fields: [{ key: 'left', label: 'left side', rows: 2 }, { key: 'right', label: 'right side', rows: 2 }],
     defaults: (s) => ({ left: [s.artist, s.venue].filter(Boolean).join('\n'), right: [s.city, s.date].filter(Boolean).join('\n') }),
     prepare: prepareWheel,
   },
