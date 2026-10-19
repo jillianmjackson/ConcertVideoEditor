@@ -41,14 +41,29 @@ async function loadHeicLib() {
   return heicLib;
 }
 
+// Decoded through an <img>: every current browser applies the camera's EXIF / HEIC rotation there,
+// and drawing the <img> onto a canvas keeps it. (createImageBitmap's default differs between browsers.)
+async function decodeBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.style.imageOrientation = 'from-image';
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
+
 async function decodeImage(file) {
   try {
-    return await createImageBitmap(file);
+    return await decodeBlob(file);
   } catch (e) {
     if (!isHeic(file)) throw e;
-    const heic2any = await loadHeicLib();       // browsers without native HEIC (Chrome, Edge, Firefox)
+    const heic2any = await loadHeicLib();       // browsers without native HEIC (Chrome, Edge, Firefox); rotation is applied
     const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-    return createImageBitmap(Array.isArray(out) ? out[0] : out);
+    return decodeBlob(Array.isArray(out) ? out[0] : out);
   }
 }
 
@@ -70,13 +85,13 @@ export class Photo {
 
   async image() {
     if (!this._img) {
-      const bmp = await decodeImage(this.file);
-      const s = Math.min(1, PHOTO_MAX_EDGE / Math.max(bmp.width, bmp.height));
-      const c = makeCanvas(Math.round(bmp.width * s), Math.round(bmp.height * s));
+      const img = await decodeImage(this.file);
+      const iw = img.naturalWidth, ih = img.naturalHeight;     // already upright
+      const s = Math.min(1, PHOTO_MAX_EDGE / Math.max(iw, ih));
+      const c = makeCanvas(Math.round(iw * s), Math.round(ih * s));
       const g = c.getContext('2d');
       g.imageSmoothingQuality = 'high';
-      g.drawImage(bmp, 0, 0, c.width, c.height);
-      bmp.close?.();
+      g.drawImage(img, 0, 0, c.width, c.height);
       this._img = c;
       decodedLRU.push(this);
       while (decodedLRU.length > MAX_DECODED) {
