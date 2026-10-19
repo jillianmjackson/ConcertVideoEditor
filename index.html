@@ -54,17 +54,15 @@
 
       <!-- 3 · render -->
       <section class="screen" data-screen="2" hidden>
-        <div class="stage"><canvas id="preview" width="360" height="640" aria-label="preview"></canvas></div>
-        <div class="scrub">
-          <button class="pill pill-on" id="play" type="button">play</button>
-          <input type="range" id="scrub" min="0" max="0" value="0" aria-label="preview time">
-          <span class="time" id="time">0.0s</span>
-        </div>
-        <div class="progress" id="progress" hidden>
+        <div class="status" id="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="render-status">
+          <div class="status-row">
+            <p id="render-status" aria-live="polite">ready</p>
+            <p class="status-pct" id="pct"></p>
+          </div>
           <div class="track"><div class="bar" id="bar"></div></div>
-          <p class="note" id="render-status" aria-live="polite"></p>
+          <p class="status-sub" id="render-sub"></p>
         </div>
-        <p class="note" id="support" hidden>rendering needs a recent chrome, edge or safari.</p>
+        <div class="stage"><canvas id="preview" width="360" height="640" aria-label="preview"></canvas></div>
       </section>
 
       <!-- 4 · export -->

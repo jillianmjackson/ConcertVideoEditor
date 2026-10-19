@@ -2,8 +2,18 @@
 
 import { FPS } from './media.js';
 
-export const canEncode = () => typeof window.VideoEncoder === 'function' && typeof window.VideoFrame === 'function'
-  && !!window.Mp4Muxer;
+export const canEncode = () => !whyCantEncode();
+
+// null when this browser can make videos, otherwise a short reason for the person
+export function whyCantEncode() {
+  if (typeof window.VideoEncoder !== 'function' || typeof window.VideoFrame !== 'function') {
+    return /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) && !/CriOS|FxiOS|Chrome/.test(navigator.userAgent)
+      ? "this phone's browser can't make videos yet. update to ios 16.4 or newer, then try again."
+      : "this browser can't make videos. try the latest chrome, edge or safari.";
+  }
+  if (!window.Mp4Muxer) return "the video tools didn't load. check your connection and reload the page.";
+  return null;
+}
 
 async function pickConfig(width, height) {
   // High / Main / Baseline at level 5.1, then 4.2 — whichever this device's encoder accepts

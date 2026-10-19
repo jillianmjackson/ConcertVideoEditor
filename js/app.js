@@ -1,6 +1,6 @@
 import { loadAlbum, filesFromDrop, isPhoto, isVideo, makeCanvas, FPS } from './media.js';
 import { TEMPLATES, W, H } from './templates.js';
-import { encodeVideo, canEncode } from './encoder.js';
+import { encodeVideo, canEncode, whyCantEncode } from './encoder.js';
 
 const $ = (s) => document.querySelector(s);
 const STORE = 'cve:v2';
@@ -43,7 +43,7 @@ const env = (id = state.template) => ({
 const SCREENS = [
   { title: 'add your media', sub: () => (state.album ? summary() : 'a folder from the show, or just the photos and videos you want.') },
   { title: 'choose a template', sub: () => 'tap one, then add the words.' },
-  { title: 'render video', sub: () => `${tpl().name} · ${tpl().seconds}s. check the preview, then render.` },
+  { title: 'render video', sub: () => `${tpl().name} · ${tpl().seconds}s video.` },
   { title: 'your video', sub: () => (state.blob ? `${tpl().name} · ${(state.blob.size / 1e6).toFixed(1)} mb` : '') },
 ];
 
@@ -56,11 +56,10 @@ const canReach = (i) => i === 0 || (i <= 2 && !!state.album) || (i === 3 && !!st
 
 function go(i) {
   if (!canReach(i) || rendering) return;
-  stopPlay();
   state.step = i;
   document.querySelectorAll('.screen').forEach((s) => { s.hidden = +s.dataset.screen !== i; });
   if (i === 1) renderCards();
-  if (i === 2) { resetScrub(); schedulePreview(); }
+  if (i === 2) { statusMsg = ''; schedulePreview(); }
   paint();
   window.scrollTo({ top: 0 });
 }
@@ -111,9 +110,9 @@ function paint() {
   right.disabled = false;
   if (i === 0) { right.textContent = 'next'; right.disabled = !state.album; }
   if (i === 1) right.textContent = 'next';
-  if (i === 2) { right.textContent = rendering ? 'rendering' : 'render'; right.disabled = rendering || !canEncode(); }
+  if (i === 2) { right.textContent = rendering ? `${renderPct}%` : 'render'; right.disabled = rendering || !canEncode(); }
   if (i === 3) right.textContent = 'export';
-  $('#support').hidden = canEncode();
+  if (i === 2) paintStatus();
 }
 
 $('#back').addEventListener('click', () => go(state.step - 1));
@@ -229,7 +228,8 @@ function renderWords() {
 const work = makeCanvas(W, H);
 const view = $('#preview');
 let prepared = null, preparedKey = '';
-let wantFrame = 0, drawing = false, playing = false, rendering = false, abort = null;
+let wantFrame = 0, drawing = false, rendering = false, abort = null;
+let renderPct = 0, statusMsg = '';
 
 const configKey = () => JSON.stringify([state.template, state.text[state.template], state.albumStamp]);
 function disposePreview() { prepared?.dispose(); prepared = null; preparedKey = ''; }
@@ -240,7 +240,7 @@ async function getPrepared() {
     await document.fonts.load('100px "Cossette Texte"');
     prepared = await tpl().prepare(env());
     preparedKey = configKey();
-    $('#scrub').max = String(prepared.frames - 1);
+    wantFrame = Math.min(prepared.frames - 1, FPS * 2);   // a still from 2s in
   }
   return prepared;
 }
@@ -265,11 +265,10 @@ async function drawPreview() {
       await p.draw(work.getContext('2d'), Math.min(f, p.frames - 1));
       showFrame();
       done = f; doneKey = key;
-      $('#time').textContent = (f / FPS).toFixed(1) + 's';
     }
   } catch (e) {
-    $('#render-status').textContent = "couldn't draw the preview: " + e.message;
-    $('#progress').hidden = false;
+    statusMsg = "couldn't draw the preview: " + e.message;
+    paintStatus();
   } finally {
     drawing = false;
   }
@@ -277,43 +276,46 @@ async function drawPreview() {
 
 let previewTimer = 0;
 function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(drawPreview, 60); }
-function resetScrub() { $('#scrub').value = '0'; wantFrame = 0; }
 
-$('#scrub').addEventListener('input', (e) => { stopPlay(); wantFrame = +e.target.value; drawPreview(); });
-$('#play').addEventListener('click', () => (playing ? stopPlay() : startPlay()));
 new ResizeObserver(() => { if (state.step === 2 && !drawing && !rendering) showFrame(); }).observe(view);
 
-async function startPlay() {
-  playing = true;
-  $('#play').textContent = 'pause';
-  const p = await getPrepared();
-  let f = +$('#scrub').value, last = performance.now();
-  while (playing) {
-    if (f >= p.frames - 1) f = 0;
-    wantFrame = f;
-    await drawPreview();
-    $('#scrub').value = String(f);
-    const now = performance.now();
-    f += Math.max(1, Math.round((now - last) / (1000 / FPS)));   // roughly real time
-    last = now;
-    await new Promise((r) => requestAnimationFrame(r));
+
+// the status bar: always says what's happening, or why rendering can't start
+function paintStatus(left = '') {
+  const why = whyCantEncode();
+  let head, sub, pct = '';
+  if (rendering) {
+    head = renderPct ? 'rendering…' : 'getting ready…';
+    pct = `${renderPct}%`;
+    sub = (left ? `about ${left} left. ` : '') + 'keep this page open and your screen on.';
+  } else if (statusMsg) {
+    head = statusMsg; sub = why || 'tap render to try again.';
+  } else if (why) {
+    head = "can't render here"; sub = why;
+  } else {
+    head = 'ready to render'; sub = 'tap render. it can take a minute or two on a phone.';
   }
+  $('#render-status').textContent = head;
+  $('#pct').textContent = pct;
+  $('#render-sub').textContent = sub;
+  $('#bar').style.width = (rendering ? renderPct : 0) + '%';
+  $('#progress').setAttribute('aria-valuenow', String(rendering ? renderPct : 0));
+  $('#progress').classList.toggle('is-blocked', !rendering && !!why);
 }
-function stopPlay() { playing = false; $('#play').textContent = 'play'; }
 
 const slug = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-');
 
 async function render() {
-  stopPlay();
   rendering = true;
+  renderPct = 0;
+  statusMsg = '';
   abort = new AbortController();
-  $('#progress').hidden = false;
-  $('#render-status').textContent = 'getting ready…';
   paint();
   const t = tpl();
-  let job = null;
+  let job = null, lock = null;
   const started = performance.now();
   try {
+    lock = await navigator.wakeLock?.request('screen').catch(() => null);   // a sleeping screen stops the render
     await document.fonts.load('100px "Cossette Texte"');
     disposePreview();                               // free the preview's videos while rendering
     job = await t.prepare(env());
@@ -322,25 +324,27 @@ async function render() {
       canvas, frames: job.frames, signal: abort.signal,
       draw: (g, i) => job.draw(g, i),
       onFrame: (i, n) => {
-        $('#bar').style.width = (100 * i / n).toFixed(1) + '%';
-        const left = (performance.now() - started) / 1000 / i * (n - i);
-        $('#render-status').textContent = `rendering… ${Math.round(100 * i / n)}% · about ${left < 60 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min'} left`;
+        const pct = Math.floor(100 * i / n);
+        if (pct === renderPct && i % 15) return;
+        renderPct = pct;
+        const s = (performance.now() - started) / 1000 / i * (n - i);
+        paintStatus(i > 10 ? (s < 60 ? Math.ceil(s) + 's' : Math.ceil(s / 60) + ' min') : '');
+        $('#dock-right').textContent = `${pct}%`;
         if (i % 15 === 0) showFrame(canvas);
       },
     });
-    const first = (state.text[t.id].title || state.text[t.id].lines || state.text[t.id].left || '').split('\n')[0];
+    const first = (state.text[t.id].title || state.text[t.id].lines || state.text[t.id].left || '').split('\n').find(Boolean);
     state.blob = blob;
     state.fileName = `${slug(first) || 'concert'}_${t.file}_9x16.mp4`;
-    $('#progress').hidden = true;
     rendering = false;
     showResult();
   } catch (e) {
-    $('#render-status').textContent = e.name === 'AbortError' ? 'cancelled.' : 'something went wrong: ' + e.message;
+    statusMsg = e.name === 'AbortError' ? 'cancelled.' : 'something went wrong: ' + e.message;
   } finally {
     job?.dispose();
+    lock?.release().catch(() => {});
     rendering = false;
     abort = null;
-    $('#bar').style.width = '0';
     paint();
   }
 }
