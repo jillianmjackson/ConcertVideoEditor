@@ -152,7 +152,7 @@ async function takeFiles(files) {
     state.album = album;
     state.albumStamp++;
     $('#upload-status').textContent = album.failed.length
-      ? `skipped ${album.failed.length}: ${album.failed.map((f) => f.name).join(', ')}`
+      ? `skipped ${album.failed.length}: ${album.failed.map((f) => `${f.name} (${f.reason})`).join(', ')}`
       : 'photos and videos stay on your device.';
     const all = [...album.photos, ...album.videos].sort((a, b) => a.taken - b.taken);
     $('#tiles').innerHTML = all.map((m) => {

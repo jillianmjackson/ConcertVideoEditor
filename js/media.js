@@ -121,9 +121,9 @@ export class Photo {
 
 // ---------------------------------------------------------------- videos
 
-function waitFor(el, ok, bad = 'error', ms = 15000) {
+function waitFor(el, ok, bad = 'error', ms = 30000) {
   return new Promise((res, rej) => {
-    const t = setTimeout(() => { done(); rej(new Error('timed out')); }, ms);
+    const t = setTimeout(() => { done(); rej(new Error('it took too long to open')); }, ms);
     const onOk = () => { done(); res(); };
     const onBad = () => { done(); rej(new Error('this browser can\'t play that video')); };
     function done() { clearTimeout(t); el.removeEventListener(ok, onOk); el.removeEventListener(bad, onBad); }
@@ -132,21 +132,49 @@ function waitFor(el, ok, bad = 'error', ms = 15000) {
   });
 }
 
+// iOS Safari is much more willing to load and decode videos that are in the page,
+// so working videos live in a tiny invisible box instead of floating detached.
+let stash = null;
+function videoStash() {
+  if (!stash) {
+    stash = document.createElement('div');
+    stash.setAttribute('aria-hidden', 'true');
+    stash.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1';
+    document.body.appendChild(stash);
+  }
+  return stash;
+}
+
+export function closeVideo(v) {
+  v.pause();
+  v.removeAttribute('src');
+  v.load();
+  v.remove();
+}
+
 export async function openVideo(url) {
   const v = document.createElement('video');
   v.muted = true;
   v.playsInline = true;
   v.preload = 'auto';
-  v.crossOrigin = 'anonymous';
   v.setAttribute('playsinline', '');
   v.setAttribute('muted', '');
+  v.style.cssText = 'width:2px;height:2px';
+  videoStash().appendChild(v);
   v.src = url;
-  if (v.readyState < 1) await waitFor(v, 'loadedmetadata');
-  if (v.readyState < 2) {
-    // iOS Safari ignores preload and won't decode a frame until the video has been played once
-    const ready = waitFor(v, 'loadeddata');
-    try { await v.play(); v.pause(); } catch { /* autoplay refused: loadeddata may still arrive */ }
-    if (v.readyState < 2) await ready; else ready.catch(() => {});
+  try {
+    if (v.readyState < 1) await waitFor(v, 'loadedmetadata');
+    if (v.readyState < 2) {
+      // iOS Safari ignores preload and won't decode a frame until the video has been played once
+      const ready = waitFor(v, 'loadeddata');
+      let played = false;
+      try { await v.play(); v.pause(); played = true; } catch { /* refused, e.g. in low power mode */ }
+      if (!played && v.readyState < 2) v.currentTime = 0.001;   // a seek also makes iOS decode a frame
+      if (v.readyState < 2) await ready; else ready.catch(() => {});
+    }
+  } catch (e) {
+    closeVideo(v);
+    throw e;
   }
   return v;
 }
@@ -206,9 +234,14 @@ export class VideoSource {
     this.quality = null;    // {bright[], sharp[], motion[], step}
   }
 
-  async analyze(step = 0.5) {
+  async analyze(step = MOBILE ? 1 : 0.5) {
     const v = await openVideo(this.url);
+    try { await this._measure(v, step); } finally { closeVideo(v); }
+  }
+
+  async _measure(v, step) {
     this.duration = v.duration;
+    if (!Number.isFinite(this.duration) || this.duration <= 0) throw new Error("couldn't tell how long it is");
     const w = 72, h = 128;
     const c = makeCanvas(w, h);
     const g = c.getContext('2d', { willReadFrequently: true });
@@ -241,7 +274,6 @@ export class VideoSource {
       }
     }
     this.quality = { bright, sharp, motion, step };
-    v.removeAttribute('src'); v.load();
   }
 }
 
@@ -274,7 +306,7 @@ export class Clip {
   }
 
   close() {
-    if (this._v) { this._v.removeAttribute('src'); this._v.load(); this._v = null; }
+    if (this._v) { closeVideo(this._v); this._v = null; }
     this._cache.clear();
   }
 }
